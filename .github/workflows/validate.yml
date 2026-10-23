@@ -1,0 +1,17 @@
+name: Validar aplicação
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar sintaxe JavaScript
+        run: node --check app.js
+      - name: Verificar arquivos essenciais
+        run: test -f index.html && test -f styles.css && test -f manifest.webmanifest && test -f sw.js

@@ -82,9 +82,101 @@
       minutes:clamp(raw.minutes,30,90,45),
       runs:clamp(raw.runs,0,3,1),
       limitations:String(raw.limitations||"").slice(0,400),
+      exerciseSwaps:cleanExerciseSwaps(raw.exerciseSwaps),
       createdAt:String(raw.createdAt||new Date().toISOString()).slice(0,40),
       logs:Array.isArray(raw.logs)?raw.logs.slice(-1000).filter(log=>log&&typeof log==="object").map(cleanLog):[]
     };
+  }
+  // Trocas são vinculadas à divisão e ao ambiente do treino, nunca a outro perfil.
+  function cleanExerciseSwaps(raw) {
+    const valid = {};
+    if(!raw || typeof raw !== "object" || Array.isArray(raw)) return valid;
+    const pattern=/^(gym|home):(fullA|fullB|fullC|upperA|upperB|lowerA|lowerB|push|pull|legs|pushB|pullB|legsB)$/;
+    for(const key of Object.keys(raw).slice(0,40)) {
+      if(!pattern.test(key)) continue;
+      const group=raw[key];
+      if(!group || typeof group!=="object" || Array.isArray(group)) continue;
+      const entries={};
+      for(const slot of Object.keys(group).slice(0,30)) {
+        if(!/^[0-9]:[^<>]{1,90}$/.test(slot)) continue;
+        const choice=typeof group[slot]==="string"?group[slot].trim():"";
+        if(choice.length>=2 && choice.length<=90) entries[slot]=choice;
+      }
+      if(Object.keys(entries).length) valid[key]=entries;
+    }
+    return valid;
+  }
+  function applyExerciseSwaps(profile,part,items) {
+    const choices=profile.exerciseSwaps?.[profile.place+":"+part]||{};
+    return items.map((item,index)=>{
+      const choice=choices[index+":"+item.name];
+      const swapped=typeof choice==="string" && choice!==item.name;
+      return {...item,originalName:item.name,name:swapped?choice:item.name,swapped};
+    });
+  }
+  // Alternativas simples por padrão de movimento; não são substituições clínicas.
+  const SWAP_OPTIONS=[
+    {match:["crucifixo inverso","elevação posterior","face pull"],label:"Ombro posterior",gym:["Crucifixo inverso no peck deck","Face pull na polia","Elevação posterior com halteres"],home:["Elevação posterior com garrafas","Face pull com elástico","Crucifixo inverso com elástico"]},
+    {match:["panturrilha"],label:"Panturrilha",gym:["Panturrilha sentada","Panturrilha no leg press","Panturrilha unilateral"],home:["Panturrilha unilateral em pé","Panturrilha sentado com mochila","Panturrilha em degrau"]},
+    {match:["prancha","abdominal"],label:"Abdômen e core",gym:["Prancha lateral","Abdominal na polia","Abdominal reverso"],home:["Prancha lateral","Abdominal reverso","Dead bug"]},
+    {match:["rosca"],label:"Bíceps",gym:["Rosca alternada","Rosca martelo","Rosca Scott","Rosca na polia"],home:["Rosca com garrafas","Rosca alternada com mochila","Rosca com elástico"]},
+    {match:["tríceps","flexão fechada"],label:"Tríceps",gym:["Tríceps francês","Tríceps corda na polia","Tríceps testa"],home:["Tríceps com elástico","Tríceps francês com mochila","Flexão fechada"]},
+    {match:["puxada","remada"],label:"Costas",gym:["Puxada neutra","Remada curvada com halteres","Remada máquina","Remada unilateral"],home:["Remada unilateral com mochila","Remada com elástico","Remada curvada com mochila"]},
+    {match:["elevação lateral","desenvolvimento"],label:"Ombros",gym:["Desenvolvimento com halteres","Elevação lateral na polia","Elevação frontal com halteres"],home:["Desenvolvimento com mochila","Elevação lateral com garrafas","Elevação frontal com garrafas"]},
+    {match:["supino","flexão de braços","flexão inclinada"],label:"Peito",gym:["Supino máquina","Supino com halteres","Crucifixo na máquina","Flexão de braços"],home:["Flexão inclinada","Flexão de braços","Flexão com mãos elevadas"]},
+    {match:["stiff","flexora"],label:"Posterior de coxa",gym:["Stiff com halteres","Mesa flexora","Cadeira flexora","Levantamento terra romeno"],home:["Stiff com mochila","Ponte de glúteos unilateral","Flexão de joelhos com toalha"]},
+    {match:["elevação pélvica","ponte de glúteos"],label:"Glúteos",gym:["Elevação pélvica na máquina","Glúteo na polia","Ponte de glúteos com carga"],home:["Ponte de glúteos unilateral","Elevação pélvica com mochila","Coice de glúteos"]},
+    {match:["agachamento","leg press","extensora","afundo"],label:"Pernas e quadríceps",gym:["Agachamento goblet","Hack machine","Cadeira extensora","Afundo com halteres"],home:["Agachamento sumô","Afundo alternado","Agachamento com mochila","Step-up em degrau"]}
+  ];
+  function suggestedSwaps(profile,item,session,index) {
+    const name=item.originalName.toLocaleLowerCase("pt-BR");
+    const group=SWAP_OPTIONS.find(g=>g.match.some(term=>name.includes(term)));
+    const choices=group?group[profile.place]:[];
+    const used=new Set(session.items.filter((_,i)=>i!==index).map(ex=>ex.name.toLocaleLowerCase("pt-BR")));
+    return {label:group?.label||"Exercícios",options:[...new Set(choices)].filter(choice=>choice.toLocaleLowerCase("pt-BR")!==item.name.toLocaleLowerCase("pt-BR")&&!used.has(choice.toLocaleLowerCase("pt-BR")))};
+  }
+  function renderSwapPanel(profile,session,item,index) {
+    const rec=suggestedSwaps(profile,item,session,index);
+    const promptId="swap-pick-"+index;
+    const customId="swap-custom-"+index;
+    return '<div class="swap-panel" id="swap-panel-'+index+'" hidden>'+
+      '<div class="field"><label for="'+promptId+'">Substituir por · '+esc(rec.label)+'</label><select id="'+promptId+'" data-swap-select>'+
+      '<option value="">Escolha uma alternativa</option>'+
+      rec.options.map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join("")+
+      '<option value="__custom__">Outro exercício (digitar nome)</option></select></div>'+
+      '<div class="field" data-custom-wrapper hidden><label for="'+customId+'">Nome do exercício</label><input id="'+customId+'" data-custom-input type="text" maxlength="90" placeholder="Digite o exercício desejado"></div>'+
+      '<p class="small muted swap-hint">A escolha ficará salva neste treino e neste perfil. Verifique se o exercício é adequado ao seu objetivo.</p>'+
+      '<div class="button-row"><button type="button" class="button button-sm" data-action="save-swap" data-index="'+index+'">Salvar substituição</button><button type="button" class="button button-outline button-sm" data-action="swap-close">Cancelar</button></div></div>';
+  }
+  // Re-renderizar o nome sem apagar cargas, repetições e anotações ainda não salvas.
+  function redrawSessionKeepingDraft() {
+    const form=document.getElementById("log-form");
+    const snapshot=form?Array.from(form.querySelectorAll("input[name],textarea[name]")).map(input=>[input.name,input.value]):[];
+    render();
+    const fresh=document.getElementById("log-form");
+    if(!fresh)return;
+    for(const [name,value] of snapshot) {
+      const input=Array.from(fresh.querySelectorAll("input[name],textarea[name]")).find(el=>el.name===name);
+      if(input)input.value=value;
+    }
+  }
+  function setExerciseSwap(index,choice) {
+    const profile=current();
+    const session=profile && makePlan(profile).find(s=>s.id===detail);
+    if(!session||session.type!=="strength"||!Number.isInteger(index)||index<0||index>=session.items.length)throw new Error("Exercício não encontrado.");
+    const item=session.items[index];
+    const name=String(choice||"").trim().replace(/\\s+/g," ");
+    if(name.length<2||name.length>90)throw new Error("Informe um exercício válido (2 a 90 caracteres).");
+    if(session.items.some((other,i)=>i!==index&&other.name.toLocaleLowerCase("pt-BR")===name.toLocaleLowerCase("pt-BR")))throw new Error("Este exercício já existe nesse mesmo treino.");
+    const key=session.planKey;
+    const slot=index+":"+item.originalName;
+    profile.exerciseSwaps ||= {};
+    profile.exerciseSwaps[key] ||= {};
+    if(name===item.originalName)delete profile.exerciseSwaps[key][slot];
+    else profile.exerciseSwaps[key][slot]=name;
+    if(!Object.keys(profile.exerciseSwaps[key]).length)delete profile.exerciseSwaps[key];
+    save();
+    redrawSessionKeepingDraft();
   }
   function cleanLog(log) {
     return {
@@ -151,7 +243,8 @@
       title:SPLIT_NAMES[part],
       type:"strength",
       minutes:profile.minutes,
-      items:exerciseRows(profile,part)
+      planKey:profile.place+":"+part,
+      items:applyExerciseSwaps(profile,part,exerciseRows(profile,part))
     }));
     const favored=[1,3,5,6,2,4,0];
     const selected=[];
@@ -264,7 +357,11 @@
   }
   function renderSession(profile,session) {
     const strength=session.type==="strength";
-    const rows=strength?session.items.map((item,index)=>'<div class="exercise-row"><div class="exercise-title"><div class="exercise-name">'+esc(item.name)+'</div><div class="exercise-meta">'+item.sets+' séries · '+esc(item.reps)+' repetições alvo</div></div>'+
+    const rows=strength?session.items.map((item,index)=>'<div class="exercise-row"><div class="exercise-title"><div class="exercise-name">'+esc(item.name)+'</div><div class="exercise-meta">'+item.sets+' séries · '+esc(item.reps)+' repetições alvo</div>'+
+      '<div class="swap-actions"><button type="button" class="swap-link" data-action="swap-open" data-index="'+index+'" aria-expanded="false" aria-controls="swap-panel-'+index+'">↔ Trocar exercício</button>'+
+      (item.swapped?'<span class="pill">Personalizado</span><button type="button" class="swap-link secondary" data-action="reset-swap" data-index="'+index+'">Restaurar original</button>':'')+'</div>'+
+      (item.swapped?'<div class="small muted">Original: '+esc(item.originalName)+'</div>':'')+
+      renderSwapPanel(profile,session,item,index)+'</div>'+
       '<div class="field"><label for="load-'+index+'">Carga (kg)</label><input id="load-'+index+'" type="number" min="0" max="600" step="0.5" name="load-'+index+'" placeholder="Opcional"></div>'+
       '<div class="field"><label for="reps-'+index+'">Reps feitas</label><input id="reps-'+index+'" maxlength="50" name="reps-'+index+'" placeholder="Ex.: 12/11/10"></div></div>').join("") :
       '<p>'+esc(session.description)+'</p><div class="form-grid">'+
@@ -336,6 +433,42 @@
       detail=button.dataset.session;render();scrollTo(0,0);return;
     }
     const action=button.dataset.action;
+    if(action==="swap-open") {
+      const row=button.closest(".exercise-row");
+      const panel=row?.querySelector(".swap-panel");
+      if(!panel)return;
+      const opening=panel.hidden;
+      document.querySelectorAll(".swap-panel").forEach(other=>other.hidden=true);
+      document.querySelectorAll('[data-action="swap-open"]').forEach(trigger=>trigger.setAttribute("aria-expanded","false"));
+      panel.hidden=!opening;
+      button.setAttribute("aria-expanded",String(opening));
+      return;
+    }
+    if(action==="swap-close") {
+      const row=button.closest(".exercise-row");
+      const panel=row?.querySelector(".swap-panel");
+      if(panel)panel.hidden=true;
+      row?.querySelector('[data-action="swap-open"]')?.setAttribute("aria-expanded","false");
+      return;
+    }
+    if(action==="save-swap"||action==="reset-swap") {
+      try {
+        const index=Number(button.dataset.index);
+        if(action==="reset-swap") {
+          const profile=current();
+          const session=makePlan(profile).find(s=>s.id===detail);
+          setExerciseSwap(index,session.items[index].originalName);
+          notify("Exercício original restaurado.");
+        } else {
+          const row=button.closest(".exercise-row");
+          const select=row?.querySelector("[data-swap-select]");
+          const choice=select?.value==="__custom__"?row?.querySelector("[data-custom-input]")?.value:select?.value;
+          setExerciseSwap(index,choice);
+          notify("Substituição salva para os próximos treinos!");
+        }
+      } catch(error) { alert(error.message||"Não foi possível trocar o exercício."); }
+      return;
+    }
     if(action==="back-plan"){detail=null;view="plan";render();scrollTo(0,0);}
     else if(action==="cancel-add"){adding=false;render();}
     else if(action==="export"){exportBackup();}
@@ -379,6 +512,15 @@
   newProfileButton.addEventListener("click",()=>{adding=true;detail=null;render();scrollTo(0,0)});
   switcher.addEventListener("change",event=>{if(state.profiles.some(p=>p.id===event.target.value)){state.activeId=event.target.value;detail=null;view="home";save();render()}});
   document.addEventListener("change",async event=>{
+    if(event.target.matches("[data-swap-select]")) {
+      const panel=event.target.closest(".swap-panel");
+      const custom=panel?.querySelector("[data-custom-wrapper]");
+      if(custom) {
+        custom.hidden=event.target.value!=="__custom__";
+        if(!custom.hidden)custom.querySelector("input")?.focus();
+      }
+      return;
+    }
     if(event.target.id!=="import-file")return;
     const file=event.target.files?.[0];if(!file)return;
     if(file.size>2*1024*1024){alert("O arquivo excede 2 MB.");return;}

@@ -83,7 +83,7 @@ function create(initial=[original]) {
   younger.open();
   assert.match(younger.app.innerHTML,/menores de 18 anos/);
   assert.doesNotMatch(younger.app.innerHTML,/calorie-total/);
-  const privacy=create([{...original,id:"new",name:"Outro",body:{weightKg:59,heightCm:178,age:30,parameter:"male",activity:"sedentary",nutritionGoal:"lose"}}]);
+  const privacy=create([{...original,id:"new",name:"Outro",body:{weightKg:57,heightCm:178,age:30,parameter:"male",activity:"sedentary",nutritionGoal:"lose"}}]);
   privacy.open();
   assert.match(privacy.app.innerHTML,/Não recomendamos calcular automaticamente/);
   assert.deepEqual(t.alerts,[]);

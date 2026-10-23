@@ -17,5 +17,9 @@ jobs:
         run: node tests/swaps.test.cjs
       - name: Testar modalidades e planos de corrida
         run: node tests/running.test.cjs
+      - name: Testar perfil corporal e diário de evolução
+        run: node tests/profile.test.cjs
+      - name: Verificar sintaxe do armazenamento de fotos
+        run: node --check profile-media.js
       - name: Verificar arquivos essenciais
-        run: test -f index.html && test -f styles.css && test -f manifest.webmanifest && test -f sw.js
+        run: test -f index.html && test -f styles.css && test -f manifest.webmanifest && test -f sw.js && test -f profile-media.js

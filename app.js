@@ -575,6 +575,9 @@
       (logs.length?'<div class="history">'+logs.slice(0,8).map(log=>'<div class="history-item"><div><strong>'+esc(log.title)+'</strong><div class="small muted">'+formatDate(log.date)+' · '+(log.type==="run"?"Corrida":"Força")+'</div></div><span class="small muted">'+(log.type==="run"?log.distance.toFixed(2).replace(".",",")+" km · ":"")+log.duration+' min</span></div>').join("")+'</div>':
       '<div class="empty"><div class="empty-icon">🌱</div><b>O primeiro treino te espera!</b><p class="muted">Registre uma sessão para começar a acompanhar sua evolução.</p></div>')+'</div></div>';
   }
+  function optionalSelect(label,name,options,selected) {
+    return '<div class="field"><label for="'+name+'">'+esc(label)+'</label><select name="'+name+'" id="'+name+'">'+options.map(o=>'<option value="'+esc(o[0])+'"'+(String(o[0])===String(selected)?' selected':'')+'>'+esc(o[1])+'</option>').join("")+'</select></div>';
+  }
   function renderProfile(profile) {
     const b=profile.body||cleanBody({});
     const calories=caloriesFor(profile);
@@ -602,8 +605,8 @@
       '<div class="field"><label for="targetWeightKg">Meta de peso (kg)</label><input type="number" id="targetWeightKg" name="targetWeightKg" min="25" max="350" step="0.1" placeholder="Ex.: 74" value="'+esc(b.targetWeightKg??"")+'"></div>'+
       '<div class="field"><label for="heightCm">Altura (cm)</label><input type="number" id="heightCm" name="heightCm" min="100" max="250" step="0.1" placeholder="Ex.: 175" value="'+esc(b.heightCm??"")+'"></div>'+
       '<div class="field"><label for="age">Idade (anos)</label><input type="number" id="age" name="age" min="1" max="110" step="1" placeholder="Ex.: 25" value="'+esc(b.age??"")+'"></div>'+
-      field("Parâmetro fisiológico da fórmula","parameter","select",[["","Selecionar"],["male","Masculino"],["female","Feminino"]],b.parameter)+
-      field("Atividade física total","activity","select",[["","Selecionar"],["sedentary","Baixa"],["light","Leve"],["moderate","Moderada"],["active","Alta"]],b.activity)+
+      optionalSelect("Parâmetro fisiológico da fórmula","parameter",[["","Selecionar"],["male","Masculino"],["female","Feminino"]],b.parameter)+
+      optionalSelect("Atividade física total","activity",[["","Selecionar"],["sedentary","Baixa"],["light","Leve"],["moderate","Moderada"],["active","Alta"]],b.activity)+
       '<div class="full">'+field("Objetivo alimentar","nutritionGoal","select",[["maintain","Manter peso"],["lose","Reduzir peso gradualmente"],["gain","Ganhar peso gradualmente"]],b.nutritionGoal)+'</div>'+
       '</div><div class="button-row"><button class="button" type="submit">Salvar dados e calcular</button></div></form></section>'+
       '<section class="stack"><div class="card"><h2>Estimativa de energia</h2>'+estimate+

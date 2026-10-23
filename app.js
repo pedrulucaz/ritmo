@@ -165,7 +165,7 @@
     const session=profile && makePlan(profile).find(s=>s.id===detail);
     if(!session||session.type!=="strength"||!Number.isInteger(index)||index<0||index>=session.items.length)throw new Error("Exercício não encontrado.");
     const item=session.items[index];
-    const name=String(choice||"").trim().replace(/\\s+/g," ");
+    const name=String(choice||"").trim().replace(/\s+/g," ");
     if(name.length<2||name.length>90)throw new Error("Informe um exercício válido (2 a 90 caracteres).");
     if(session.items.some((other,i)=>i!==index&&other.name.toLocaleLowerCase("pt-BR")===name.toLocaleLowerCase("pt-BR")))throw new Error("Este exercício já existe nesse mesmo treino.");
     const key=session.planKey;

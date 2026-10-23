@@ -5,6 +5,8 @@
   const DAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
   const GOALS = {muscle:"Ganhar massa muscular",fat:"Reduzir gordura",fitness:"Condicionamento",wellness:"Saúde e movimento"};
   const LEVELS = {beginner:"Iniciante",intermediate:"Intermediário",advanced:"Avançado"};
+  const MODES = {both:"Musculação e corrida",strength:"Só musculação",run:"Só corrida"};
+  const RUN_DISTANCES = [[0,"Estou começando (caminhada e trote)"],[2,"Até 2 km"],[3,"3 km"],[5,"5 km"],[8,"8 km"],[10,"10 km"],[15,"15 km ou mais"]];
   const PLACES = {gym:"Academia",home:"Em casa"};
   const SPLITS = {
     2:["fullA","fullB"],
@@ -70,17 +72,41 @@
     } catch(error) { console.warn("Não foi possível recuperar os dados locais.",error); }
     return {profiles:[],activeId:""};
   }
+  function safeRunDays(days) {
+    return [...new Set(Array.isArray(days)?days.map(Number).filter(v=>Number.isInteger(v)&&v>=0&&v<=6):[])].sort((a,b)=>a-b).slice(0,5);
+  }
+  function legacyRunDays(raw) {
+    const wanted=clamp(raw.runs,0,3,0);
+    const occupied=new Set(SCHEDULES[clamp(raw.days,2,6,3)]);
+    const suggested=[1,3,5,6,2,4,0];
+    const result=[];
+    for(const day of suggested) {
+      if(result.length>=wanted)break;
+      if(!occupied.has(day))result.push(day);
+    }
+    for(const day of suggested) {
+      if(result.length>=wanted)break;
+      if(!result.includes(day))result.push(day);
+    }
+    return result.sort((a,b)=>a-b);
+  }
   function cleanProfile(raw) {
     if(!raw || typeof raw!=="object") throw new Error("Perfil inválido");
+    const runDays=Array.isArray(raw.runDays)?safeRunDays(raw.runDays):legacyRunDays(raw);
+    const mode=MODES[raw.mode]?raw.mode:(runDays.length?"both":"strength");
     return {
       id:String(raw.id||uid()).slice(0,120),
       name:String(raw.name||"Pessoa").slice(0,60),
+      mode,
       goal:GOALS[raw.goal]?raw.goal:"fitness",
       level:LEVELS[raw.level]?raw.level:"beginner",
       place:PLACES[raw.place]?raw.place:"gym",
       days:clamp(raw.days,2,6,3),
       minutes:clamp(raw.minutes,30,90,45),
-      runs:clamp(raw.runs,0,3,1),
+      runLevel:LEVELS[raw.runLevel]?raw.runLevel:(LEVELS[raw.level]?raw.level:"beginner"),
+      runBaseKm:[0,2,3,5,8,10,15].includes(Number(raw.runBaseKm))?Number(raw.runBaseKm):0,
+      runDays,
+      runs:mode==="strength"?0:runDays.length,
       limitations:String(raw.limitations||"").slice(0,400),
       exerciseSwaps:cleanExerciseSwaps(raw.exerciseSwaps),
       createdAt:String(raw.createdAt||new Date().toISOString()).slice(0,40),
@@ -235,34 +261,60 @@
     const sets = profile.level==="beginner"?2:profile.level==="advanced"&&profile.minutes>=60?4:3;
     return body.slice(0,count).map((name,index)=>({name,sets:index===count-1&&profile.level==="beginner"?2:sets,reps:name==="Prancha"?"20–45 s":reps}));
   }
+  function kmText(km) {return Number(km).toFixed(1).replace(".",",")+" km";}
+  function roundHalf(value) {return Math.max(1,Math.round(value*2)/2);}
+  function runningSession(profile,day,index,count) {
+    // O esforço declarado pelo usuário é a referência: esta semana não progride automaticamente.
+    const novice=profile.runBaseKm===0;
+    const baseline=novice?2:profile.runBaseKm;
+    const easy=novice?2:roundHalf(Math.max(1.5,baseline*0.75));
+    const quality=novice?2:roundHalf(Math.max(1.5,baseline*0.65));
+    const long=novice?2.5:roundHalf(Math.max(2,baseline*1.1));
+    let kind="easy";
+    if(count>=2&&index===count-1)kind="long";
+    else if(count>=3&&index===1)kind=profile.runLevel==="beginner"?"walkrun":"interval";
+    else if(count>=4&&index===count-2)kind="recovery";
+    else if(count>=5&&index===2)kind="steady";
+    const titles={easy:"Corrida leve",long:"Longão",interval:"Intervalado controlado",walkrun:"Caminhada e trote",recovery:"Corrida regenerativa",steady:"Corrida contínua"};
+    const target=kind==="long"?long:kind==="interval"||kind==="walkrun"?quality:kind==="recovery"?roundHalf(easy*0.8):easy;
+    const runningPace=profile.runLevel==="advanced"?6:profile.runLevel==="intermediate"?8:11;
+    const minutes=Math.min(160,Math.max(20,Math.round(target*runningPace+10)));
+    const instructions=novice||profile.runLevel==="beginner"?
+      ["Aqueça caminhando de 5 a 10 minutos.",
+       kind==="long"?"Complete a distância com alternância de caminhada e trote, sem perseguir velocidade.":"Alterne cerca de 2 minutos caminhando e 1 minuto trotando, ajustando conforme seu conforto.",
+       "Finalize caminhando leve por 5 minutos. Reduza a distância se necessário."]:
+      kind==="interval"?
+      ["Aqueça com 8 a 10 minutos de corrida bem leve.",
+       "Alterne 1 minuto de ritmo um pouco mais rápido com 2 minutos leves, repetindo 4 a 6 vezes, sem fazer sprint.",
+       "Desacelere e caminhe ou trote de 5 a 10 minutos."]:
+      kind==="long"?
+      ["Comece com 5 a 10 minutos de ritmo fácil.",
+       "Faça a parte principal em ritmo confortável, no qual ainda consiga conversar. Não é treino de velocidade.",
+       "Termine desacelerando por 5 minutos. Diminua a distância se não estiver confortável."]:
+      ["Comece com 5 a 10 minutos de ritmo muito leve.",
+       kind==="recovery"?"Mantenha o restante do percurso fácil e relaxado.":"Mantenha ritmo de conversa, sem buscar recordes ou velocidade.",
+       "Finalize desacelerando de 5 a 10 minutos."];
+    return {
+      id:"run-"+day, day, title:titles[kind], type:"run",
+      minutes, targetKm:target, kind, items:[], instructions,
+      description:novice?"Distância-alvo inclui caminhada e trote. Faça pausas quando precisar.":
+        kind==="long"?"Sessão mais longa da semana em ritmo fácil.":"Adapte o ritmo às sensações e à recuperação."
+    };
+  }
   function makePlan(profile) {
-    const strengthDays = SCHEDULES[profile.days];
-    const sessions = SPLITS[profile.days].map((part,index)=>({
-      id:"strength-"+index,
-      day:strengthDays[index],
-      title:SPLIT_NAMES[part],
-      type:"strength",
-      minutes:profile.minutes,
-      planKey:profile.place+":"+part,
-      items:applyExerciseSwaps(profile,part,exerciseRows(profile,part))
-    }));
-    const favored=[1,3,5,6,2,4,0];
-    const selected=[];
-    for(let i=0;i<profile.runs;i++){
-      const day = favored.find(d=>!selected.includes(d)&&!strengthDays.includes(d));
-      const fallback = favored.find(d=>!selected.includes(d));
-      selected.push(day===undefined?fallback:fallback===undefined?6:day);
+    const sessions=[];
+    if(profile.mode!=="run"){
+      const strengthDays=SCHEDULES[profile.days];
+      SPLITS[profile.days].forEach((part,index)=>sessions.push({
+        id:"strength-"+index,day:strengthDays[index],title:SPLIT_NAMES[part],
+        type:"strength",minutes:profile.minutes,planKey:profile.place+":"+part,
+        items:applyExerciseSwaps(profile,part,exerciseRows(profile,part))
+      }));
     }
-    selected.forEach((day,index)=>{
-      const prescription = profile.level==="beginner"?
-        "Alternar 2 min de caminhada com 1 min de trote, sem forçar o ritmo.":
-        profile.level==="intermediate"?"Corrida confortável em ritmo de conversa.": "Corrida leve e contínua; ajuste a intensidade à recuperação.";
-      sessions.push({
-        id:"run-"+index,day,title:"Corrida "+(index+1),type:"run",
-        minutes:profile.level==="beginner"?20:profile.level==="intermediate"?30:40,
-        description:prescription,items:[]
-      });
-    });
+    if(profile.mode!=="strength"){
+      const runDays=safeRunDays(profile.runDays);
+      runDays.forEach((day,index)=>sessions.push(runningSession(profile,day,index,runDays.length)));
+    }
     return sessions.sort((a,b)=>a.day-b.day||(a.type==="strength"?-1:1));
   }
   function getStats(profile) {
@@ -296,17 +348,38 @@
     return '<div class="field"><label for="'+name+'">'+label+'</label><input id="'+name+'" name="'+name+'" type="'+kind+'" required maxlength="60" value="'+esc(selected||"")+'" placeholder="Como podemos chamar você?"></div>';
   }
   function profileFields(profile) {
-    const p=profile||{name:"",goal:"muscle",level:"beginner",place:"gym",days:3,minutes:45,runs:1,limitations:""};
+    const p=profile||{name:"",mode:"both",goal:"muscle",level:"beginner",place:"gym",days:3,minutes:45,runLevel:"beginner",runBaseKm:0,runDays:[1,5],limitations:""};
+    const strengthActive=p.mode!=="run";
+    const runActive=p.mode!=="strength";
+    const runDays=safeRunDays(p.runDays);
     return '<div class="form-grid">'+
-      field("Como podemos chamar você?","name","text",null,p.name)+
+      '<div class="full">'+field("Seu nome","name","text",null,p.name)+'</div>'+
+      '<div class="full">'+field("Como você pretende usar o Ritmo?","mode","select",Object.entries(MODES),p.mode)+'</div>'+
+      '<fieldset class="form-section full" data-mode-section="strength"'+(strengthActive?'':' hidden disabled')+'>'+
+      '<legend>Seu treino de musculação</legend><div class="form-grid">'+
       field("Seu objetivo","goal","select",Object.entries(GOALS),p.goal)+
-      field("Experiência de treino","level","select",Object.entries(LEVELS),p.level)+
+      field("Nível na musculação","level","select",Object.entries(LEVELS),p.level)+
       field("Onde você vai treinar?","place","select",Object.entries(PLACES),p.place)+
       field("Dias de musculação por semana","days","select",[[2,"2 dias"],[3,"3 dias"],[4,"4 dias"],[5,"5 dias"],[6,"6 dias"]],p.days)+
-      field("Tempo por treino","minutes","select",[[30,"30 minutos"],[45,"45 minutos"],[60,"60 minutos"],[75,"75 minutos"],[90,"90 minutos"]],p.minutes)+
-      field("Corridas por semana","runs","select",[[0,"Ainda não vou correr"],[1,"1 corrida"],[2,"2 corridas"],[3,"3 corridas"]],p.runs)+
-      '<div class="field"><label for="limitations">Alguma observação? (opcional)</label><input id="limitations" name="limitations" maxlength="400" value="'+esc(p.limitations)+'" placeholder="Ex.: evito agachamento profundo"></div>'+
+      '<div class="full">'+field("Tempo por treino","minutes","select",[[30,"30 minutos"],[45,"45 minutos"],[60,"60 minutos"],[75,"75 minutos"],[90,"90 minutos"]],p.minutes)+'</div></div></fieldset>'+
+      '<fieldset class="form-section full" data-mode-section="run"'+(runActive?'':' hidden disabled')+'>'+
+      '<legend>Sua corrida</legend><div class="form-grid">'+
+      field("Nível na corrida","runLevel","select",Object.entries(LEVELS),p.runLevel)+
+      field("Qual distância você percorre confortavelmente?","runBaseKm","select",RUN_DISTANCES,p.runBaseKm)+
+      '<div class="field full"><span>Dias da semana para correr</span><div class="run-days">'+
+      DAYS.map((day,index)=>'<label class="day-check"><input type="checkbox" name="runDays" value="'+index+'"'+(runDays.includes(index)?' checked':'')+'><span>'+day+'</span></label>').join("")+
+      '</div><p class="small muted">Escolha de 1 a 5 dias. Pode coincidir com dias de musculação, se você optar pelas duas atividades.</p></div>'+
+      '</div></fieldset>'+
+      '<div class="field full"><label for="limitations">Observações (opcional)</label><input id="limitations" name="limitations" maxlength="400" value="'+esc(p.limitations)+'" placeholder="Ex.: prefiro treinos mais leves"></div>'+
       '</div>';
+  }
+  function syncModeFields(form) {
+    const mode=form.querySelector('[name="mode"]')?.value;
+    for(const fieldset of form.querySelectorAll("[data-mode-section]")) {
+      const visible=mode==="both"||(mode==="run"?fieldset.dataset.modeSection==="run":fieldset.dataset.modeSection==="strength");
+      fieldset.hidden=!visible;
+      fieldset.disabled=!visible;
+    }
   }
   function renderOnboarding() {
     return '<section class="onboard">'+
@@ -333,7 +406,10 @@
       (todays.length?'<div class="grid two">'+todays.map(s=>sessionCard(s)).join("")+'</div>':
         '<div class="card"><h3>Descanso também é progresso.</h3><p class="muted">Aproveite para dormir bem, se alimentar e recuperar a energia.</p><button class="button button-outline" data-nav="plan" type="button">Ver outros dias</button></div>')+
       '<div class="section-title"><h2>Seu ponto de partida</h2></div>'+
-      '<div class="grid two"><div class="card"><h3>Plano feito para seu perfil</h3><p class="muted">'+profile.days+' dias de musculação e '+profile.runs+' corrida(s) por semana, com sessões de cerca de '+profile.minutes+' minutos.</p></div>'+
+      '<div class="grid two"><div class="card"><h3>Plano feito para seu perfil</h3><p class="muted">'+
+      (profile.mode!=="run"?profile.days+' dias de musculação':'Sem musculação')+
+      (profile.mode==="strength"?'.':', '+safeRunDays(profile.runDays).length+' dia(s) de corrida por semana.')+
+      '</p></div>'+
       '<div class="card"><h3>Acompanhe a evolução</h3><p class="muted">Registre repetições, cargas e corridas; veja suas sessões ao longo das semanas.</p><button class="button button-outline button-sm" data-nav="history" type="button">Ver histórico</button></div></div>';
   }
   function statCard(number,label,description) {
@@ -341,17 +417,17 @@
   }
   function sessionCard(session) {
     return '<article class="card day-card"><div class="day-head"><h3>'+esc(session.title)+'</h3><span class="pill '+(session.type==="run"?"yellow":"")+'">'+(session.type==="run"?"Corrida":"Força")+'</span></div>'+
-      '<p class="muted small">'+session.minutes+' min previstos · '+(session.type==="run"?"Cardio":session.items.length+" exercícios")+'</p>'+
+      '<p class="muted small">'+(session.type==="run"?kmText(session.targetKm)+' · cerca de '+session.minutes+' min':session.minutes+' min previstos · '+session.items.length+' exercícios')+'</p>'+
       '<button class="button button-outline button-sm" type="button" data-session="'+esc(session.id)+'">Abrir treino →</button></article>';
   }
   function renderPlan(profile) {
     const sessions=makePlan(profile);
-    return '<div class="section-title"><div><div class="eyebrow">Organização semanal</div><h1>Seu plano de treino</h1><p class="muted">Sessões sugeridas para '+esc(profile.name)+' — '+esc(LEVELS[profile.level])+', '+esc(PLACES[profile.place])+'.</p></div></div>'+
+    return '<div class="section-title"><div><div class="eyebrow">Organização semanal</div><h1>Seu plano de treino</h1><p class="muted">Sessões sugeridas para '+esc(profile.name)+' — '+esc(MODES[profile.mode])+'.</p></div></div>'+
       '<div class="notice">Comece com cargas e intensidades confortáveis, respeitando a técnica e a recuperação. Você pode ajustar o perfil em Ajustes.</div>'+
       '<div class="grid" style="margin-top:17px">'+DAYS.map((day,index)=>{
         const each=sessions.filter(s=>s.day===index);
         return '<article class="card day-card"><div class="day-head"><h3>'+day+'</h3><span class="pill '+(each.length?"":"gray")+'">'+(each.length?each.length+' sessão(ões)':'Descanso')+'</span></div>'+
-          (each.length?each.map(s=>'<div class="session '+(s.type==="run"?"run":"")+'"><h3>'+esc(s.title)+'</h3><p class="small muted">'+s.minutes+' min</p><button class="button button-outline button-sm" data-session="'+esc(s.id)+'" type="button">Detalhes / registrar</button></div>').join(""):
+          (each.length?each.map(s=>'<div class="session '+(s.type==="run"?"run":"")+'"><h3>'+esc(s.title)+'</h3><p class="small muted">'+(s.type==="run"?kmText(s.targetKm)+' · aproximadamente ':'')+s.minutes+' min</p><button class="button button-outline button-sm" data-session="'+esc(s.id)+'" type="button">Detalhes / registrar</button></div>').join(""):
           '<p class="muted small">Recuperação, mobilidade leve ou caminhada opcional.</p>')+'</article>';
       }).join("")+'</div>';
   }
@@ -364,8 +440,11 @@
       renderSwapPanel(profile,session,item,index)+'</div>'+
       '<div class="field"><label for="load-'+index+'">Carga (kg)</label><input id="load-'+index+'" type="number" min="0" max="600" step="0.5" name="load-'+index+'" placeholder="Opcional"></div>'+
       '<div class="field"><label for="reps-'+index+'">Reps feitas</label><input id="reps-'+index+'" maxlength="50" name="reps-'+index+'" placeholder="Ex.: 12/11/10"></div></div>').join("") :
-      '<p>'+esc(session.description)+'</p><div class="form-grid">'+
-      '<div class="field"><label for="distance">Distância (km)</label><input id="distance" name="distance" type="number" step="0.01" min="0" max="100" placeholder="Ex.: 3.5"></div></div>';
+      '<div class="run-target"><span class="run-number">'+kmText(session.targetKm)+'</span><span>Meta indicativa da sessão, não obrigatória</span></div>'+
+      '<p class="muted">'+esc(session.description)+'</p>'+
+      '<h3>Como executar</h3><ol class="run-steps">'+session.instructions.map(step=>'<li>'+esc(step)+'</li>').join("")+'</ol>'+
+      '<div class="notice warning small">A distância é uma sugestão baseada na capacidade informada, não em avaliação individual. Reduza ou interrompa se houver dor, tontura ou mal-estar.</div>'+
+      '<div class="form-grid" style="margin-top:18px"><div class="field"><label for="distance">Distância realizada (km)</label><input id="distance" name="distance" type="number" step="0.01" min="0" max="100" placeholder="Ex.: 3.5"></div></div>';
     return '<div class="detail"><div class="eyebrow">'+DAYS[session.day]+' · '+(strength?"Musculação":"Corrida")+'</div>'+
       '<h1>'+esc(session.title)+'</h1>'+
       '<p class="muted">'+session.minutes+' min estimados. Registre o que realmente fez; não é necessário atingir todas as metas.</p>'+
@@ -406,19 +485,29 @@
       '<div class="card"><h2>Privacidade</h2><div class="notice warning">Perfis nesta versão são locais, sem senha ou conta online. Outras pessoas no mesmo navegador podem acessá-los. Não use para informações sensíveis.</div>'+
       '<div class="button-row"><button type="button" class="button button-danger" data-action="delete-profile">Excluir perfil atual</button></div></div></div></div>';
   }
-  function valuesFromForm(form) {
+  function valuesFromForm(form,previous) {
     const data=new FormData(form);
     const name=String(data.get("name")||"").trim();
     if(!name)throw new Error("Informe seu nome.");
+    const old=previous||{goal:"muscle",level:"beginner",place:"gym",days:3,minutes:45,runLevel:"beginner",runBaseKm:0,runDays:[1,5],limitations:""};
+    const mode=String(data.get("mode")||"");
+    if(!MODES[mode])throw new Error("Selecione como vai utilizar o aplicativo.");
+    const wantsRunning=mode!=="strength";
+    const checked=safeRunDays(typeof data.getAll==="function"?data.getAll("runDays"):[]);
+    if(wantsRunning&&checked.length===0)throw new Error("Escolha pelo menos um dia para corrida.");
+    if(wantsRunning&&typeof data.getAll==="function"&&data.getAll("runDays").length>5)throw new Error("Selecione no máximo 5 dias de corrida.");
     return {
-      name:name.slice(0,60),
-      goal:String(data.get("goal")),
-      level:String(data.get("level")),
-      place:String(data.get("place")),
-      days:Number(data.get("days")),
-      minutes:Number(data.get("minutes")),
-      runs:Number(data.get("runs")),
-      limitations:String(data.get("limitations")||"").trim()
+      name:name.slice(0,60),mode,
+      goal:mode==="run"?old.goal:String(data.get("goal")),
+      level:mode==="run"?old.level:String(data.get("level")),
+      place:mode==="run"?old.place:String(data.get("place")),
+      days:mode==="run"?old.days:Number(data.get("days")),
+      minutes:mode==="run"?old.minutes:Number(data.get("minutes")),
+      runLevel:mode==="strength"?old.runLevel:String(data.get("runLevel")),
+      runBaseKm:mode==="strength"?old.runBaseKm:Number(data.get("runBaseKm")),
+      runDays:mode==="strength"?safeRunDays(old.runDays):checked,
+      runs:mode==="strength"?0:checked.length,
+      limitations:String(data.get("limitations")||"").trim().slice(0,400)
     };
   }
 
@@ -492,7 +581,7 @@
         state.profiles.push(profile);state.activeId=profile.id;adding=false;view="home";save();render();scrollTo(0,0);notify("Seu plano foi criado!");
       }else if(form.id==="settings-form"){
         const p=current();
-        Object.assign(p,valuesFromForm(form));save();render();notify("Plano atualizado, histórico preservado.");
+        Object.assign(p,cleanProfile({...p,...valuesFromForm(form,p)}));save();render();notify("Plano atualizado, histórico preservado.");
       }else{
         const p=current();
         const session=makePlan(p).find(s=>s.id===form.dataset.id);
@@ -512,6 +601,10 @@
   newProfileButton.addEventListener("click",()=>{adding=true;detail=null;render();scrollTo(0,0)});
   switcher.addEventListener("change",event=>{if(state.profiles.some(p=>p.id===event.target.value)){state.activeId=event.target.value;detail=null;view="home";save();render()}});
   document.addEventListener("change",async event=>{
+    if(event.target.matches('[name="mode"]')) {
+      syncModeFields(event.target.form);
+      return;
+    }
     if(event.target.matches("[data-swap-select]")) {
       const panel=event.target.closest(".swap-panel");
       const custom=panel?.querySelector("[data-custom-wrapper]");

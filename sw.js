@@ -1,5 +1,5 @@
-const CACHE="ritmo-v3";
-const STATIC=["./","./index.html","./styles.css?v=3","./app.js?v=3","./icon.svg","./manifest.webmanifest"];
+const CACHE="ritmo-v4";
+const STATIC=["./","./index.html","./styles.css?v=4","./app.js?v=4","./icon.svg","./manifest.webmanifest"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(STATIC)).then(()=>self.skipWaiting())));
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",e=>{

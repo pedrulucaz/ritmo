@@ -29,3 +29,9 @@ Projeto sem build: HTML/CSS/JavaScript.
 3. Depois de publicar, endereço previsto: https://pedrulucaz.github.io/ritmo/
 
 No iPhone: Compartilhar > Adicionar à Tela de Início.
+
+## Modalidades e corrida
+- No questionário e em **Ajustes**, escolha **Só musculação**, **Só corrida** ou **Musculação e corrida**.
+- Em corrida, selecione nível independente do nível de musculação, distância confortável e os dias específicos da semana (1 a 5, inclusive em dias com musculação).
+- Cada sessão de corrida descreve distância-alvo, propósito (leve, alternância/intervalado, regenerativa, longão), aquecimento, sessão principal e volta à calma.
+- As distâncias são **indicativas**, não evoluem automaticamente entre semanas e não substituem orientação de profissionais; reduza a sessão quando necessário. O histórico e as trocas de exercícios continuam associados ao perfil e são preservados ao mudar de modalidade.

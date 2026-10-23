@@ -328,8 +328,9 @@
   document.addEventListener("click", event=>{
     const button=event.target.closest("button");
     if(!button)return;
-    if(button.dataset.nav){
-      view=button.dataset.nav;detail=null;adding=false;render();scrollTo(0,0);return;
+    const targetView=button.dataset.tab || button.dataset.nav;
+    if(targetView && ["home","plan","history","settings"].includes(targetView)){
+      view=targetView;detail=null;adding=false;render();scrollTo(0,0);return;
     }
     if(button.dataset.session){
       detail=button.dataset.session;render();scrollTo(0,0);return;

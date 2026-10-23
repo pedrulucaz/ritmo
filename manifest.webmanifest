@@ -1,0 +1,19 @@
+{
+  "name": "Ritmo — Seu treino",
+  "short_name": "Ritmo",
+  "description": "Monte e acompanhe treinos de musculação e corrida.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f3",
+  "theme_color": "#18312b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

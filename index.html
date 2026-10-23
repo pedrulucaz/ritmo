@@ -11,8 +11,9 @@
   <title>Ritmo | Treinos no seu ritmo</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=4">
-  <script src="./app.js?v=4" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=5">
+  <script src="./profile-media.js?v=5" defer></script>
+  <script src="./app.js?v=5" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -23,7 +24,7 @@
       </a>
       <div class="top-actions">
         <select id="profile-switch" aria-label="Perfil ativo" hidden></select>
-        <button id="new-profile" type="button" class="button button-outline button-sm">+ Perfil</button>
+        <button id="profile-open" type="button" class="profile-trigger" hidden aria-label="Abrir seu perfil"><span class="mini-avatar" id="header-avatar-fallback">R</span><img id="header-avatar" class="mini-avatar" alt="" hidden><span id="profile-trigger-name" class="profile-trigger-name">Perfil</span><span aria-hidden="true">›</span></button>
       </div>
     </header>
     <nav class="tabs" aria-label="Navegação principal" id="tabs" hidden>

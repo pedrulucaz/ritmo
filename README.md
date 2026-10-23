@@ -35,3 +35,10 @@ No iPhone: Compartilhar > Adicionar à Tela de Início.
 - Em corrida, selecione nível independente do nível de musculação, distância confortável e os dias específicos da semana (1 a 5, inclusive em dias com musculação).
 - Cada sessão de corrida descreve distância-alvo, propósito (leve, alternância/intervalado, regenerativa, longão), aquecimento, sessão principal e volta à calma.
 - As distâncias são **indicativas**, não evoluem automaticamente entre semanas e não substituem orientação de profissionais; reduza a sessão quando necessário. O histórico e as trocas de exercícios continuam associados ao perfil e são preservados ao mudar de modalidade.
+
+## Meu perfil e acompanhamento corporal
+- Toque no nome/foto no topo para abrir a página de perfil, adicionar avatar, peso, altura, meta e um diário local com fotos e evolução do peso.
+- Fotos são otimizadas em JPEG e armazenadas no **IndexedDB do próprio navegador**, não no GitHub. Dados textuais continuam no localStorage, por perfil.
+- O cálculo de calorias utiliza Mifflin-St Jeor multiplicado por estimativa de atividade (1,2 / 1,375 / 1,55 / 1,725). É apenas uma estimativa para adultos (18+); não equivale a prescrição dietética ou profissional.
+- Exportações JSON da versão 2 incluem dados e imagens locais. Para migrar de celular ou navegador, exporte e importe em Ajustes; a importação substitui os dados anteriores. Backups de versões antigas não incluem fotos.
+- Em dispositivos compartilhados, perfis e fotos podem ser vistos por terceiros; não há autenticação e a exclusão dos dados do navegador pode apagar definitivamente o histórico.

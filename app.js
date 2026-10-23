@@ -44,12 +44,15 @@
   const app = document.getElementById("app");
   const nav = document.getElementById("tabs");
   const switcher = document.getElementById("profile-switch");
-  const newProfileButton = document.getElementById("new-profile");
+  const profileButton = document.getElementById("profile-open");
+  const profileName = document.getElementById("profile-trigger-name");
   const toastEl = document.getElementById("toast");
   let state = load();
   let view = "home";
   let detail = null;
   let adding = false;
+  let mediaRender=0;
+  let imageUrls=[];
 
   function esc(value) {
     return String(value === undefined || value === null ? "" : value)
@@ -109,11 +112,103 @@
       runs:mode==="strength"?0:runDays.length,
       limitations:String(raw.limitations||"").slice(0,400),
       exerciseSwaps:cleanExerciseSwaps(raw.exerciseSwaps),
+      body:cleanBody(raw.body),
+      progress:cleanProgress(raw.progress),
       createdAt:String(raw.createdAt||new Date().toISOString()).slice(0,40),
       logs:Array.isArray(raw.logs)?raw.logs.slice(-1000).filter(log=>log&&typeof log==="object").map(cleanLog):[]
     };
   }
   // Trocas são vinculadas à divisão e ao ambiente do treino, nunca a outro perfil.
+  function decimal(value,min,max){
+    if(value===null||value===undefined||String(value).trim()==="")return null;
+    const num=Number(value);
+    return Number.isFinite(num)&&num>=min&&num<=max?Math.round(num*10)/10:null;
+  }
+  function cleanBody(raw) {
+    const b=raw&&typeof raw==="object"?raw:{};
+    return {
+      weightKg:decimal(b.weightKg,25,350),
+      targetWeightKg:decimal(b.targetWeightKg,25,350),
+      heightCm:decimal(b.heightCm,100,250),
+      age:decimal(b.age,1,110),
+      parameter:["female","male"].includes(b.parameter)?b.parameter:"",
+      activity:["sedentary","light","moderate","active"].includes(b.activity)?b.activity:"",
+      nutritionGoal:["maintain","lose","gain"].includes(b.nutritionGoal)?b.nutritionGoal:"maintain"
+    };
+  }
+  function cleanProgress(raw) {
+    if(!Array.isArray(raw))return [];
+    return raw.slice(-30).filter(x=>x&&typeof x==="object").map(x=>({
+      id:String(x.id||uid()).replace(/[^a-zA-Z0-9-]/g,"").slice(0,80)||uid(),
+      date:/^\d{4}-\d{2}-\d{2}$/.test(String(x.date))?String(x.date):new Date().toISOString().slice(0,10),
+      weightKg:decimal(x.weightKg,25,350),
+      notes:String(x.notes||"").slice(0,400),
+      hasPhoto:Boolean(x.hasPhoto)
+    }));
+  }
+  function caloriesFor(profile) {
+    const b=profile.body||{};
+    const {weightKg:w,heightCm:h,age,parameter,activity,nutritionGoal}=b;
+    if(!w||!h||!age||!parameter||!activity)return null;
+    if(age<18)return {restricted:true,message:"Para menores de 18 anos, o cálculo automático não é indicado."};
+    const bmr=10*w+6.25*h-5*age+(parameter==="male"?5:-161);
+    const factors={sedentary:1.2,light:1.375,moderate:1.55,active:1.725};
+    const maintenance=Math.round(bmr*factors[activity]/10)*10;
+    const bmi=w/((h/100)**2);
+    let goal=nutritionGoal==="lose"?maintenance-250:nutritionGoal==="gain"?maintenance+250:maintenance;
+    if(nutritionGoal==="lose"&&bmi<18.5)goal=null;
+    if(goal!==null&&goal<1200)goal=null;
+    return {maintenance,goal,bmi:Math.round(bmi*10)/10,restricted:false};
+  }
+  function localDate(){
+    const d=new Date();
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  function weightChart(profile) {
+    const points=[...profile.progress].filter(p=>p.weightKg!==null).sort((a,b)=>a.date.localeCompare(b.date)).slice(-12);
+    if(points.length<2)return '<p class="muted small">Registre o peso em pelo menos duas datas para ver seu gráfico.</p>';
+    const values=points.map(p=>p.weightKg),min=Math.min(...values)-1,max=Math.max(...values)+1,range=max-min;
+    const coords=values.map((n,i)=>[20+(i/(values.length-1))*510,130-(n-min)/range*105]);
+    return '<svg class="weight-chart" viewBox="0 0 550 158" role="img" aria-label="Evolução de peso de '+esc(values[0])+' a '+esc(values[values.length-1])+' quilogramas">'+
+      '<line x1="15" y1="135" x2="535" y2="135" stroke="#dfe7df"/>'+
+      '<polyline points="'+coords.map(p=>p.map(v=>v.toFixed(1)).join(",")).join(" ")+'" fill="none" stroke="#267a54" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+      coords.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="4" fill="#267a54"/>').join("")+
+      '<text x="18" y="151" font-size="12" fill="#667670">'+esc(points[0].date.slice(5))+'</text>'+
+      '<text x="533" y="151" text-anchor="end" font-size="12" fill="#667670">'+esc(points[points.length-1].date.slice(5))+'</text></svg>';
+  }
+  function hydrateImages(profile) {
+    const request=++mediaRender;
+    for(const url of imageUrls)URL.revokeObjectURL(url);
+    imageUrls=[];
+    const head=document.getElementById("header-avatar");
+    const smallFallback=document.getElementById("header-avatar-fallback");
+    if(head)head.hidden=true;
+    if(smallFallback)smallFallback.hidden=false;
+    if(typeof RitmoMedia==="undefined"||!profile)return;
+    (async()=>{
+      const avatar=await RitmoMedia.get(profile.id,"avatar");
+      if(request!==mediaRender)return;
+      if(avatar) {
+        const url=URL.createObjectURL(avatar);imageUrls.push(url);
+        for(const id of ["header-avatar","profile-avatar"]){const el=document.getElementById(id);if(el){el.src=url;el.hidden=false;}}
+        for(const id of ["header-avatar-fallback","profile-avatar-fallback"]){const el=document.getElementById(id);if(el)el.hidden=true;}
+      }
+      if(view!=="profile")return;
+      for(const entry of profile.progress) {
+        if(!entry.hasPhoto)continue;
+        const photo=await RitmoMedia.get(profile.id,"progress:"+entry.id);
+        if(request!==mediaRender)return;
+        if(!photo)continue;
+        const image=document.getElementById("progress-image-"+entry.id);
+        if(image){
+          const url=URL.createObjectURL(photo);imageUrls.push(url);
+          image.src=url;image.hidden=false;
+          const placeholder=document.getElementById("progress-placeholder-"+entry.id);
+          if(placeholder)placeholder.hidden=true;
+        }
+      }
+    })().catch(error=>console.warn("Não foi possível carregar as fotos locais.",error));
+  }
   function cleanExerciseSwaps(raw) {
     const valid = {};
     if(!raw || typeof raw !== "object" || Array.isArray(raw)) return valid;
@@ -327,21 +422,26 @@
     const showTabs=Boolean(profile)&&!adding;
     nav.hidden=!showTabs;
     switcher.hidden=state.profiles.length<2;
-    newProfileButton.hidden=adding;
+    if(profileButton)profileButton.hidden=!profile||adding;
+    if(profileName&&profile)profileName.textContent=profile.name;
+    const avatarInitial=document.getElementById("header-avatar-fallback");
+    if(avatarInitial&&profile)avatarInitial.textContent=profile.name.trim().slice(0,1).toUpperCase()||"R";
     if(state.profiles.length>1){
       switcher.innerHTML=state.profiles.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===profile.id?' selected':'')+'>'+esc(p.name)+'</option>').join("");
     }
     nav.querySelectorAll("button[data-tab]").forEach(button=>button.classList.toggle("active",button.dataset.tab===view && !detail));
-    if(!profile || adding){app.innerHTML=renderOnboarding();return;}
+    if(!profile || adding){app.innerHTML=renderOnboarding();hydrateImages(null);return;}
     if(detail){
       const session=makePlan(profile).find(s=>s.id===detail);
-      if(session){app.innerHTML=renderSession(profile,session);return;}
+      if(session){app.innerHTML=renderSession(profile,session);hydrateImages(profile);return;}
       detail=null;
     }
-    if(view==="plan")app.innerHTML=renderPlan(profile);
+    if(view==="profile")app.innerHTML=renderProfile(profile);
+    else if(view==="plan")app.innerHTML=renderPlan(profile);
     else if(view==="history")app.innerHTML=renderHistory(profile);
     else if(view==="settings")app.innerHTML=renderSettings(profile);
     else app.innerHTML=renderHome(profile);
+    hydrateImages(profile);
   }
   function field(label,name,kind,options,selected) {
     if(kind==="select") return '<div class="field"><label for="'+name+'">'+label+'</label><select name="'+name+'" id="'+name+'" required>'+options.map(o=>'<option value="'+esc(o[0])+'"'+(String(o[0])===String(selected)?' selected':'')+'>'+esc(o[1])+'</option>').join("")+'</select></div>';
@@ -475,11 +575,64 @@
       (logs.length?'<div class="history">'+logs.slice(0,8).map(log=>'<div class="history-item"><div><strong>'+esc(log.title)+'</strong><div class="small muted">'+formatDate(log.date)+' · '+(log.type==="run"?"Corrida":"Força")+'</div></div><span class="small muted">'+(log.type==="run"?log.distance.toFixed(2).replace(".",",")+" km · ":"")+log.duration+' min</span></div>').join("")+'</div>':
       '<div class="empty"><div class="empty-icon">🌱</div><b>O primeiro treino te espera!</b><p class="muted">Registre uma sessão para começar a acompanhar sua evolução.</p></div>')+'</div></div>';
   }
+  function renderProfile(profile) {
+    const b=profile.body||cleanBody({});
+    const calories=caloriesFor(profile);
+    const progress=[...profile.progress].sort((a,b)=>b.date.localeCompare(a.date));
+    const weight=b.weightKg?b.weightKg.toLocaleString("pt-BR")+" kg":"—";
+    const target=b.targetWeightKg?b.targetWeightKg.toLocaleString("pt-BR")+" kg":"—";
+    const bmi=calories&&!calories.restricted?calories.bmi.toFixed(1).replace(".",","):"—";
+    const estimate=calories&&!calories.restricted?
+      '<div class="calorie-total">'+calories.maintenance.toLocaleString("pt-BR")+' kcal/dia</div><p class="small muted">Estimativa para manutenção, com base na equação Mifflin-St Jeor e no nível de atividade informado.</p>'+
+      (calories.goal===null?'<div class="notice warning">Não recomendamos calcular automaticamente uma meta de restrição para os dados informados. Procure orientação profissional.</div>':
+      '<div class="calorie-goal">'+(b.nutritionGoal==="lose"?"Redução gradual":b.nutritionGoal==="gain"?"Aumento gradual":"Manutenção")+': <strong>'+calories.goal.toLocaleString("pt-BR")+' kcal/dia</strong></div>'):
+      '<p class="muted">'+(calories?.message||"Preencha peso, altura, idade, parâmetro da fórmula e atividade para obter uma estimativa.")+'</p>';
+    return '<div class="eyebrow">Sua jornada</div><h1>Perfil de '+esc(profile.name)+'</h1>'+
+      '<section class="card"><div class="profile-heading"><div class="profile-avatar-wrap"><span id="profile-avatar-fallback">'+esc(profile.name.slice(0,1).toUpperCase())+'</span><img id="profile-avatar" alt="Foto de '+esc(profile.name)+'" hidden></div>'+
+      '<div><h2>'+esc(profile.name)+'</h2><p class="muted small">Suas fotos ficam neste dispositivo.</p>'+
+      '<div class="button-row"><label class="button button-outline button-sm" for="avatar-file">Alterar foto</label><input id="avatar-file" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif">'+
+      '<button type="button" class="button button-outline button-sm" data-action="remove-avatar">Remover foto</button></div></div></div></section>'+
+      '<section class="grid profile-stats">'+
+      statCard("Peso atual",weight,"Atualizado no perfil")+
+      statCard("Meta de peso",target,"Referência pessoal")+
+      statCard("IMC estimado",bmi,"Indicador geral, não diagnóstico")+'</section>'+
+      '<div class="grid two profile-layout"><section class="card"><h2>Dados e metas</h2><p class="small muted">Preencha apenas o que desejar. Os dados não são enviados para um servidor.</p>'+
+      '<form id="body-form"><div class="form-grid">'+
+      '<div class="field"><label for="weightKg">Peso atual (kg)</label><input type="number" id="weightKg" name="weightKg" min="25" max="350" step="0.1" placeholder="Ex.: 78,5" value="'+esc(b.weightKg??"")+'"></div>'+
+      '<div class="field"><label for="targetWeightKg">Meta de peso (kg)</label><input type="number" id="targetWeightKg" name="targetWeightKg" min="25" max="350" step="0.1" placeholder="Ex.: 74" value="'+esc(b.targetWeightKg??"")+'"></div>'+
+      '<div class="field"><label for="heightCm">Altura (cm)</label><input type="number" id="heightCm" name="heightCm" min="100" max="250" step="0.1" placeholder="Ex.: 175" value="'+esc(b.heightCm??"")+'"></div>'+
+      '<div class="field"><label for="age">Idade (anos)</label><input type="number" id="age" name="age" min="1" max="110" step="1" placeholder="Ex.: 25" value="'+esc(b.age??"")+'"></div>'+
+      field("Parâmetro fisiológico da fórmula","parameter","select",[["","Selecionar"],["male","Masculino"],["female","Feminino"]],b.parameter)+
+      field("Atividade física total","activity","select",[["","Selecionar"],["sedentary","Baixa"],["light","Leve"],["moderate","Moderada"],["active","Alta"]],b.activity)+
+      '<div class="full">'+field("Objetivo alimentar","nutritionGoal","select",[["maintain","Manter peso"],["lose","Reduzir peso gradualmente"],["gain","Ganhar peso gradualmente"]],b.nutritionGoal)+'</div>'+
+      '</div><div class="button-row"><button class="button" type="submit">Salvar dados e calcular</button></div></form></section>'+
+      '<section class="stack"><div class="card"><h2>Estimativa de energia</h2>'+estimate+
+      '<p class="small muted">Valores aproximados, não uma dieta. Considere idade, condições de saúde e orientação de nutricionista; não usar na gestação ou amamentação como prescrição.</p></div>'+
+      '<div class="card"><h2>Histórico de peso</h2>'+weightChart(profile)+'</div></section></div>'+
+      '<section class="card profile-diary"><h2>Diário de evolução</h2><p class="muted small">Registre peso, fotos e anotações. Até 30 registros neste dispositivo.</p>'+
+      '<form id="progress-form"><div class="form-grid">'+
+      '<div class="field"><label for="progress-date">Data</label><input required type="date" name="date" id="progress-date" value="'+localDate()+'"></div>'+
+      '<div class="field"><label for="progress-weight">Peso nesta data (kg, opcional)</label><input type="number" id="progress-weight" name="weightKg" min="25" max="350" step="0.1" placeholder="Ex.: 77,5"></div>'+
+      '<div class="field full"><label for="progress-notes">Anotações (opcional)</label><textarea id="progress-notes" name="notes" rows="2" maxlength="400" placeholder="Como foi a evolução nesta semana?"></textarea></div>'+
+      '<div class="field full"><label for="progress-photo">Foto de evolução (opcional)</label><input type="file" id="progress-photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"></div></div>'+
+      '<div class="button-row"><button class="button" type="submit">Adicionar registro</button></div></form>'+
+      '<hr class="line"><h3>Seus registros</h3>'+
+      (progress.length?'<div class="diary-grid">'+progress.map(item=>'<article class="diary-entry">'+
+      (item.hasPhoto?'<div class="diary-media"><span id="progress-placeholder-'+esc(item.id)+'">Foto local</span><img id="progress-image-'+esc(item.id)+'" loading="lazy" alt="Evolução registrada em '+esc(item.date)+'" hidden></div>':'')+
+      '<div class="diary-content"><b>'+esc(item.date.split("-").reverse().join("/"))+'</b>'+
+      (item.weightKg!==null?'<div class="muted small">'+esc(item.weightKg.toLocaleString("pt-BR"))+' kg</div>':'')+
+      (item.notes?'<p class="small">'+esc(item.notes)+'</p>':'')+
+      '<button type="button" class="swap-link secondary" data-action="delete-progress" data-id="'+esc(item.id)+'">Excluir registro</button></div></article>').join("")+'</div>':
+      '<p class="muted small">Nenhum registro ainda. Seu primeiro acompanhamento começa aqui.</p>')+'</section>'+
+      '<section class="card profile-privacy"><h2>Seus perfis e privacidade</h2><p class="muted small">As fotos são armazenadas no navegador e incluídas no backup JSON exportado a partir de agora. Outros usuários do mesmo navegador podem ver esses dados. Evite cadastrar informações sensíveis em dispositivos compartilhados.</p>'+
+      '<button class="button button-outline" type="button" data-action="new-profile">+ Criar outro perfil</button></section>';
+  }
+
   function renderSettings(profile) {
     return '<div class="eyebrow">Suas preferências</div><h1>Seu Ritmo, suas escolhas</h1>'+
       '<div class="grid two"><div class="card"><h2>Atualizar plano</h2><p class="muted small">Ao salvar, seu plano será recalculado; o histórico anterior será preservado.</p>'+
       '<form id="settings-form">'+profileFields(profile)+'<div class="button-row"><button class="button" type="submit">Atualizar meu plano</button></div></form></div>'+
-      '<div class="stack"><div class="card"><h2>Seus dados</h2><p class="muted">Faça backup neste dispositivo. Os perfis não sincronizam automaticamente.</p>'+
+      '<div class="stack"><div class="card"><h2>Seus dados</h2><p class="muted">O backup JSON inclui fotos locais nesta versão. Os perfis não sincronizam automaticamente entre dispositivos.</p>'+
       '<div class="button-row"><button class="button button-outline" data-action="export" type="button">Exportar backup</button>'+
       '<label class="button button-outline" for="import-file">Importar backup</label><input id="import-file" type="file" accept=".json,application/json" class="sr-only"></div></div>'+
       '<div class="card"><h2>Privacidade</h2><div class="notice warning">Perfis nesta versão são locais, sem senha ou conta online. Outras pessoas no mesmo navegador podem acessá-los. Não use para informações sensíveis.</div>'+
@@ -511,7 +664,7 @@
     };
   }
 
-  document.addEventListener("click", event=>{
+  document.addEventListener("click", async event=>{
     const button=event.target.closest("button");
     if(!button)return;
     const targetView=button.dataset.tab || button.dataset.nav;
@@ -558,21 +711,42 @@
       } catch(error) { alert(error.message||"Não foi possível trocar o exercício."); }
       return;
     }
+    if(action==="new-profile"){adding=true;detail=null;render();scrollTo(0,0);return;}
+    if(action==="remove-avatar"){
+      const p=current();
+      if(p&&typeof RitmoMedia!=="undefined"&&confirm("Remover a foto de perfil deste dispositivo?")) {
+        try {await RitmoMedia.remove(p.id,"avatar");render();notify("Foto removida.");}
+        catch(error){alert(error.message);}
+      }
+      return;
+    }
+    if(action==="delete-progress"){
+      const p=current(),entry=p?.progress.find(item=>item.id===button.dataset.id);
+      if(entry&&confirm("Excluir este registro e a foto associada?")) {
+        try {
+          if(typeof RitmoMedia!=="undefined")await RitmoMedia.remove(p.id,"progress:"+entry.id);
+          p.progress=p.progress.filter(item=>item.id!==entry.id);
+          save();render();notify("Registro excluído.");
+        }catch(error){alert(error.message);}
+      }
+      return;
+    }
     if(action==="back-plan"){detail=null;view="plan";render();scrollTo(0,0);}
     else if(action==="cancel-add"){adding=false;render();}
-    else if(action==="export"){exportBackup();}
+    else if(action==="export"){await exportBackup();}
     else if(action==="delete-profile"){
       const p=current();
       if(p&&confirm("Excluir o perfil de "+p.name+" e todo seu histórico neste navegador? Esta ação não pode ser desfeita.")){
+        if(typeof RitmoMedia!=="undefined"){try{await RitmoMedia.removeProfile(p.id);}catch(error){alert("Perfil excluído, mas algumas fotos locais podem permanecer: "+error.message);}}
         state.profiles=state.profiles.filter(item=>item.id!==p.id);
         state.activeId=state.profiles[0]?.id||"";
         view="home";detail=null;save();render();notify("Perfil excluído.");
       }
     }
   });
-  document.addEventListener("submit",event=>{
+  document.addEventListener("submit",async event=>{
     const form=event.target;
-    if(!["onboard-form","settings-form","log-form"].includes(form.id))return;
+    if(!["onboard-form","settings-form","log-form","body-form","progress-form"].includes(form.id))return;
     event.preventDefault();
     try{
       if(form.id==="onboard-form"){
@@ -582,6 +756,32 @@
       }else if(form.id==="settings-form"){
         const p=current();
         Object.assign(p,cleanProfile({...p,...valuesFromForm(form,p)}));save();render();notify("Plano atualizado, histórico preservado.");
+      }else if(form.id==="body-form"){
+        const p=current(),data=new FormData(form);
+        const updated=cleanBody({
+          weightKg:data.get("weightKg"),targetWeightKg:data.get("targetWeightKg"),heightCm:data.get("heightCm"),
+          age:data.get("age"),parameter:data.get("parameter"),activity:data.get("activity"),nutritionGoal:data.get("nutritionGoal")
+        });
+        if(data.get("age")&&Number(data.get("age"))<18) {
+          // Registre apenas como informação; nunca mostre estimativa calórica infantil.
+        }
+        p.body=updated;save();render();notify("Dados salvos. Estimativa atualizada.");
+      }else if(form.id==="progress-form"){
+        const p=current(),data=new FormData(form);
+        const photo=form.querySelector("#progress-photo")?.files?.[0];
+        const weightKg=decimal(data.get("weightKg"),25,350);
+        const notes=String(data.get("notes")||"").trim().slice(0,400);
+        const date=String(data.get("date")||"");
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error("Selecione uma data válida.");
+        if(!notes&&!photo&&weightKg===null)throw new Error("Informe peso, uma anotação ou adicione uma foto.");
+        if(data.get("weightKg")&&weightKg===null)throw new Error("Informe um peso válido.");
+        if(p.progress.length>=30)throw new Error("Limite de 30 registros. Exclua um anterior para continuar.");
+        if(photo&&typeof RitmoMedia==="undefined")throw new Error("Este dispositivo não permite salvar fotos.");
+        const entry={id:uid(),date,weightKg,notes,hasPhoto:Boolean(photo)};
+        if(photo)await RitmoMedia.save(p.id,"progress:"+entry.id,photo,false);
+        p.progress.push(entry);
+        if(weightKg!==null)p.body.weightKg=weightKg;
+        save();render();notify("Registro adicionado ao seu diário!");
       }else{
         const p=current();
         const session=makePlan(p).find(s=>s.id===form.dataset.id);
@@ -598,7 +798,7 @@
       }
     }catch(error){alert(error.message||"Não foi possível concluir a ação.");}
   });
-  newProfileButton.addEventListener("click",()=>{adding=true;detail=null;render();scrollTo(0,0)});
+  if(profileButton)profileButton.addEventListener("click",()=>{adding=false;detail=null;view="profile";render();scrollTo(0,0);});
   switcher.addEventListener("change",event=>{if(state.profiles.some(p=>p.id===event.target.value)){state.activeId=event.target.value;detail=null;view="home";save();render()}});
   document.addEventListener("change",async event=>{
     if(event.target.matches('[name="mode"]')) {
@@ -614,27 +814,43 @@
       }
       return;
     }
+    if(event.target.id==="avatar-file"){
+      const file=event.target.files?.[0];if(!file)return;
+      try{
+        if(typeof RitmoMedia==="undefined")throw new Error("Álbum local indisponível.");
+        const p=current();if(!p)throw new Error("Perfil não encontrado.");
+        await RitmoMedia.save(p.id,"avatar",file,true);
+        render();notify("Foto de perfil atualizada!");
+      }catch(error){alert(error.message||"Não foi possível salvar a foto.");}
+      return;
+    }
     if(event.target.id!=="import-file")return;
     const file=event.target.files?.[0];if(!file)return;
-    if(file.size>2*1024*1024){alert("O arquivo excede 2 MB.");return;}
+    if(file.size>25*1024*1024){alert("O arquivo excede 25 MB.");return;}
     try{
       const parsed=JSON.parse(await file.text());
       if(!parsed||!Array.isArray(parsed.profiles)||parsed.profiles.length>20||!parsed.profiles.length)throw new Error("Backup inválido.");
       const profiles=parsed.profiles.map(cleanProfile);
-      if(confirm("Substituir todos os perfis locais pelo conteúdo deste backup? Faça uma exportação antes de continuar.")){
+      if(confirm("Substituir todos os perfis locais pelo conteúdo deste backup, incluindo fotos? Faça uma exportação antes de continuar.")){
+        if(typeof RitmoMedia!=="undefined")await RitmoMedia.replaceAll(Array.isArray(parsed.media)?parsed.media:[]);
         state={profiles,activeId:profiles.some(p=>p.id===parsed.activeId)?parsed.activeId:profiles[0].id};
         detail=null;view="home";save();render();notify("Backup importado com sucesso.");
       }
     }catch(error){alert("Falha ao importar o backup: "+error.message)}
     event.target.value="";
   });
-  function exportBackup() {
-    const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),...state},null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const link=document.createElement("a");
-    link.href=url;link.download="ritmo-backup-"+new Date().toISOString().slice(0,10)+".json";
-    link.click();
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  async function exportBackup() {
+    try {
+      const media=typeof RitmoMedia!=="undefined"?await RitmoMedia.exportAll(state.profiles.map(p=>p.id)):[];
+      const backup={version:2,exportedAt:new Date().toISOString(),...state,media};
+      const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;link.download="ritmo-backup-"+new Date().toISOString().slice(0,10)+".json";
+      link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      notify("Backup criado com dados e fotos locais.");
+    }catch(error){alert("Falha ao exportar o backup: "+error.message);}
   }
   if("serviceWorker" in navigator && location.protocol==="https:") {
     window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.warn));

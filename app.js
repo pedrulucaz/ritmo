@@ -397,7 +397,7 @@
     const stat=getStats(profile);
     return '<div class="hero"><div class="eyebrow">Seu espaço de treino</div>'+
       '<h1>Oi, '+esc(profile.name)+'!<br>Encontre seu ritmo.</h1>'+
-      '<p>Seu objetivo: '+esc(GOALS[profile.goal])+'. Pequenas conquistas criam grandes mudanças — no seu tempo.</p>'+
+      '<p>'+(profile.mode==="run"?"Modalidade: só corrida.":"Seu objetivo: "+esc(GOALS[profile.goal])+".")+' Pequenas conquistas criam grandes mudanças — no seu tempo.</p>'+
       '<div class="button-row"><button class="button button-light" data-nav="plan" type="button">Ver meu plano →</button></div></div>'+
       '<section class="grid">'+statCard("Treinos nesta semana",stat.week,"sessões registradas")+
       statCard("Treinos no histórico",stat.total,"sessões concluídas")+

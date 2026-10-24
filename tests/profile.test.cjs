@@ -8,9 +8,9 @@ const original={id:"p1",name:"Ana & Bia",goal:"muscle",level:"intermediate",plac
 function create(initial=[original]) {
   const callbacks={},store=new Map([["ritmo.app.v1",JSON.stringify({profiles:initial,activeId:initial[0]?.id||""})]]);
   const images=new Map(),alerts=[],app={innerHTML:""},nav={hidden:true,querySelectorAll:()=>[]};
-  const name={textContent:""},avatarBtn={hidden:false,addEventListener(type,cb){callbacks["profile:"+type]=cb;}};
+  const avatarBtn={hidden:false,setAttribute(key,value){this[key]=value;},addEventListener(type,cb){callbacks["profile:"+type]=cb;}};
   const switcher={hidden:true,addEventListener(){}},toast={textContent:"",hidden:true},avatarInitial={textContent:""};
-  const ids={app,tabs:nav,"profile-open":avatarBtn,"profile-trigger-name":name,"header-avatar-fallback":avatarInitial,"profile-switch":switcher,toast};
+  const ids={app,tabs:nav,"profile-open":avatarBtn,"header-avatar-fallback":avatarInitial,"profile-switch":switcher,toast};
   const document={
     getElementById(id){return ids[id]||null;},
     querySelectorAll(){return[];},
@@ -43,13 +43,19 @@ function create(initial=[original]) {
     const form={id,values,querySelector(selector){if(selector==="#progress-photo")return{files:photo?[photo]:[]};return null;}};
     await callbacks.submit({target:form,preventDefault(){}});
   };
-  return {app,name,avatarBtn,alerts,store,images,media,click,submit,callbacks,
+  return {app,avatarBtn,avatarInitial,alerts,store,images,media,click,submit,callbacks,
     saved(){return JSON.parse(store.get("ritmo.app.v1"));},
     open(){callbacks["profile:click"]();}};
 }
 (async()=>{
   const t=create();
-  assert.equal(t.name.textContent,"Ana & Bia");
+  assert.equal(t.avatarBtn["aria-label"],"Abrir perfil de Ana & Bia");
+  assert.equal(t.avatarInitial.textContent,"A");
+  const html=fs.readFileSync("index.html","utf8");
+  const css=fs.readFileSync("styles.css","utf8");
+  assert.match(html,/class="profile-avatar-shell"/);
+  assert.doesNotMatch(html,/profile-trigger-name/);
+  assert.match(css,/\.mini-avatar\[hidden\]\{display:none!important\}/);
   t.open();
   assert.match(t.app.innerHTML,/Perfil de Ana &amp; Bia/);
   assert.match(t.app.innerHTML,/id="avatar-file"/);

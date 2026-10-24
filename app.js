@@ -45,7 +45,6 @@
   const nav = document.getElementById("tabs");
   const switcher = document.getElementById("profile-switch");
   const profileButton = document.getElementById("profile-open");
-  const profileName = document.getElementById("profile-trigger-name");
   const toastEl = document.getElementById("toast");
   let state = load();
   let view = "home";
@@ -423,7 +422,10 @@
     nav.hidden=!showTabs;
     switcher.hidden=state.profiles.length<2;
     if(profileButton)profileButton.hidden=!profile||adding;
-    if(profileName&&profile)profileName.textContent=profile.name;
+    if(profileButton&&profile) {
+      profileButton.setAttribute("aria-label","Abrir perfil de "+profile.name);
+      profileButton.title="Abrir perfil de "+profile.name;
+    }
     const avatarInitial=document.getElementById("header-avatar-fallback");
     if(avatarInitial&&profile)avatarInitial.textContent=profile.name.trim().slice(0,1).toUpperCase()||"R";
     if(state.profiles.length>1){

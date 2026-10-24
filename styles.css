@@ -27,11 +27,12 @@
 .run-steps li{padding-left:5px;margin:9px 0}
 @media(max-width:740px){.form-section{padding:15px 12px}.run-days{grid-template-columns:repeat(2,minmax(0,1fr))}.day-check{font-size:.85rem;padding:10px 8px}}
 
-/* Área pessoal: nome e imagem do usuário na barra superior */
-.profile-trigger{display:flex;align-items:center;gap:9px;min-height:43px;padding:4px 10px 4px 5px;border:1px solid var(--edge);border-radius:99px;background:#fff;color:var(--ink);font-weight:750;max-width:220px}
+/* Avatar compacto no cabeçalho; mostra somente a foto OU a inicial */
+.profile-trigger{width:44px;height:44px;min-width:44px;flex:0 0 44px;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--edge);border-radius:50%;background:#fff;color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.06)}
 .profile-trigger[hidden]{display:none!important}
-.mini-avatar{width:35px;height:35px;flex:none;display:grid;place-items:center;border-radius:50%;background:#e5f3e5;color:#206446;font-size:.93rem;font-weight:850;object-fit:cover}
-.profile-trigger-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-avatar-shell{width:36px;height:36px;position:relative;display:block;flex:none}
+.mini-avatar{position:absolute;inset:0;width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#e5f3e5;color:#206446;font-size:.93rem;font-weight:850;object-fit:cover}
+.mini-avatar[hidden]{display:none!important}
 .profile-heading{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
 .profile-heading h2{margin-bottom:2px}
 .profile-avatar-wrap{height:100px;width:100px;border-radius:24px;overflow:hidden;background:#e5f3e5;display:grid;place-items:center;font-size:3rem;font-weight:800;color:#267a54;flex:none}
@@ -53,4 +54,4 @@
 .diary-content{padding:13px}
 .diary-content p{margin:6px 0}
 .profile-privacy{margin-top:16px}
-@media(max-width:750px){.top-actions select{max-width:90px}.profile-trigger{max-width:155px}.profile-heading{gap:14px}.profile-avatar-wrap{width:75px;height:75px;border-radius:19px;font-size:2.3rem}.profile-layout{grid-template-columns:1fr}}
+@media(max-width:750px){.top-actions select{max-width:90px}.profile-heading{gap:14px}.profile-avatar-wrap{width:75px;height:75px;border-radius:19px;font-size:2.3rem}.profile-layout{grid-template-columns:1fr}}

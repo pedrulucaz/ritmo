@@ -11,9 +11,18 @@
   <title>Ritmo | Treinos no seu ritmo</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=7">
+  <link rel="stylesheet" href="./styles.css?v=8">
   <script src="./profile-media.js?v=5" defer></script>
-  <script src="./app.js?v=7" defer></script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({ appId: "68226497-2a60-466a-960c-a162cc31c72a" });
+      window.RitmoOneSignal = OneSignal;
+      window.dispatchEvent(new Event("ritmo-onesignal-ready"));
+    });
+  </script>
+  <script src="./app.js?v=8" defer></script>
 </head>
 <body>
   <div class="shell">

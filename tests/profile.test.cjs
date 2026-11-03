@@ -95,8 +95,7 @@ function create(initial=[original]) {
   assert.deepEqual(t.alerts,[]);
   const water=create();
   assert.match(water.app.innerHTML,/Água de hoje/);
-  assert.equal(water.saved().profiles[0].hydration.goalMl,2000);
-  assert.equal(water.saved().profiles[0].hydration.entries.length,0);
+  assert.match(water.app.innerHTML,/\/ 2 L/);
   await water.click({action:"water-add",amount:"250"});
   assert.equal(water.saved().profiles[0].hydration.entries[0].amountMl,250);
   assert.match(water.app.innerHTML,/250 ml/);

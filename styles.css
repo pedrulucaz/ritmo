@@ -55,3 +55,25 @@
 .diary-content p{margin:6px 0}
 .profile-privacy{margin-top:16px}
 @media(max-width:750px){.top-actions select{max-width:90px}.profile-heading{gap:14px}.profile-avatar-wrap{width:75px;height:75px;border-radius:19px;font-size:2.3rem}.profile-layout{grid-template-columns:1fr}}
+
+
+/* Controle diário de hidratação */
+.water-card{margin:18px 0;padding:22px}
+.water-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.water-head h2{margin-bottom:4px}
+.water-head p{margin-bottom:0}
+.water-total{font-size:2.15rem;font-weight:850;letter-spacing:-.055em;line-height:1.2;margin:19px 0 12px}
+.water-total span{font-size:1rem;font-weight:650;letter-spacing:0;color:var(--muted)}
+.water-progress{height:12px;background:#e8eee8;border-radius:99px;overflow:hidden}
+.water-progress span{display:block;height:100%;background:linear-gradient(90deg,#76c7d6,#287e9b);border-radius:99px;transition:width .25s ease}
+.water-quick-actions{display:flex;flex-wrap:wrap;gap:9px;margin:15px 0}
+.water-quick-actions .button{min-width:92px}
+.water-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;max-width:520px}
+.water-form .button{min-height:45px}
+.water-recent{margin-top:18px;border-top:1px solid var(--edge);padding-top:14px;max-width:520px}
+.water-recent h3{margin-bottom:8px}
+.water-log-item{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #edf1ed}
+.water-empty{margin-top:16px}
+.water-goal-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:14px 0}
+.water-goal-form .field{width:min(100%,240px)}
+@media(max-width:520px){.water-card{padding:18px}.water-head{gap:8px}.water-head .pill{white-space:nowrap}.water-total{font-size:1.9rem}.water-form{grid-template-columns:1fr}.water-form .button{width:100%}.water-quick-actions .button{flex:1;min-width:0}}

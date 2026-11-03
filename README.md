@@ -7,6 +7,7 @@
 - Divisão automática de musculação de 2 a 6 dias e sessões de corrida adequadas ao nível.
 - Registro de exercícios, carga, repetições e anotações.
 - Histórico, metas semanais e gráfico de evolução.
+- Controle diário de hidratação, com meta configurável, registros em ml e acompanhamento do total do dia.
 - Múltiplos perfis **locais** no mesmo navegador; exportação/importação de backup JSON.
 - Instalação PWA e modo offline após o primeiro carregamento.
 
@@ -35,6 +36,11 @@ No iPhone: Compartilhar > Adicionar à Tela de Início.
 - Em corrida, selecione nível independente do nível de musculação, distância confortável e os dias específicos da semana (1 a 5, inclusive em dias com musculação).
 - Cada sessão de corrida descreve distância-alvo, propósito (leve, alternância/intervalado, regenerativa, longão), aquecimento, sessão principal e volta à calma.
 - As distâncias são **indicativas**, não evoluem automaticamente entre semanas e não substituem orientação de profissionais; reduza a sessão quando necessário. O histórico e as trocas de exercícios continuam associados ao perfil e são preservados ao mudar de modalidade.
+
+## Hidratação
+- Registre 150 ml, 250 ml, 500 ml ou uma quantidade personalizada na tela inicial.
+- A meta diária começa em 2.000 ml e pode ser ajustada em **Ajustes**.
+- Os registros são locais, separados por perfil e incluídos no backup JSON.
 
 ## Meu perfil e acompanhamento corporal
 - Toque no nome/foto no topo para abrir a página de perfil, adicionar avatar, peso, altura, meta e um diário local com fotos e evolução do peso.

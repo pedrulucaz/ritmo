@@ -113,6 +113,7 @@
       exerciseSwaps:cleanExerciseSwaps(raw.exerciseSwaps),
       body:cleanBody(raw.body),
       progress:cleanProgress(raw.progress),
+      hydration:cleanHydration(raw.hydration),
       createdAt:String(raw.createdAt||new Date().toISOString()).slice(0,40),
       logs:Array.isArray(raw.logs)?raw.logs.slice(-1000).filter(log=>log&&typeof log==="object").map(cleanLog):[]
     };
@@ -144,6 +145,29 @@
       notes:String(x.notes||"").slice(0,400),
       hasPhoto:Boolean(x.hasPhoto)
     }));
+  }
+  function cleanHydration(raw) {
+    const h=raw&&typeof raw==="object"?raw:{};
+    const entries=Array.isArray(h.entries)?h.entries.slice(-500).filter(x=>x&&typeof x==="object").map(x=>({
+      id:String(x.id||uid()).slice(0,100),
+      date:/^\d{4}-\d{2}-\d{2}$/.test(String(x.date))?String(x.date):localDate(),
+      amountMl:clamp(x.amountMl,50,2000,250),
+      createdAt:String(x.createdAt||new Date().toISOString()).slice(0,40)
+    })):[];
+    return {goalMl:clamp(h.goalMl,500,10000,2000),entries};
+  }
+  function waterSummary(profile) {
+    const hydration=cleanHydration(profile.hydration);
+    const entries=hydration.entries.filter(entry=>entry.date===localDate()).sort((x,y)=>x.createdAt.localeCompare(y.createdAt));
+    const total=entries.reduce((sum,entry)=>sum+entry.amountMl,0);
+    return {goalMl:hydration.goalMl,entries,total,remaining:Math.max(0,hydration.goalMl-total),percent:Math.round(total/hydration.goalMl*100)};
+  }
+  function waterAmountText(ml) {
+    return ml>=1000?(ml/1000).toLocaleString("pt-BR",{maximumFractionDigits:2})+" L":ml+" ml";
+  }
+  function waterTime(entry) {
+    const date=new Date(entry.createdAt);
+    return Number.isNaN(date.getTime())?"":new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(date);
   }
   function caloriesFor(profile) {
     const b=profile.body||{};
@@ -492,6 +516,18 @@
       '<div class="button-row"><button class="button" type="submit">Criar meu plano →</button>'+
       (state.profiles.length?'<button class="button button-outline" data-action="cancel-add" type="button">Cancelar</button>':'')+'</div></form></div></section>';
   }
+  function renderWaterCard(profile) {
+    const summary=waterSummary(profile);
+    const latest=summary.entries.slice(-4).reverse();
+    return '<section class="card water-card"><div class="water-head"><div><div class="eyebrow">Hidratação diária</div><h2>Água de hoje</h2><p class="muted small">Registre cada copo e acompanhe seu consumo.</p></div><span class="pill">'+summary.percent+'% da meta</span></div>'+
+      '<div class="water-total">'+waterAmountText(summary.total)+' <span>/ '+waterAmountText(summary.goalMl)+'</span></div>'+
+      '<div class="water-progress" role="progressbar" aria-label="Progresso da meta de água" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.min(100,summary.percent)+'"><span style="width:'+Math.min(100,summary.percent)+'%"></span></div>'+
+      '<p class="small muted">'+(summary.remaining?'Faltam '+waterAmountText(summary.remaining)+' para sua meta de hoje.':'Meta diária atingida! Continue respeitando sua sede e rotina.')+'</p>'+
+      '<div class="water-quick-actions"><button class="button button-outline button-sm" type="button" data-action="water-add" data-amount="150">+150 ml</button><button class="button button-outline button-sm" type="button" data-action="water-add" data-amount="250">+250 ml</button><button class="button button-outline button-sm" type="button" data-action="water-add" data-amount="500">+500 ml</button></div>'+
+      '<form id="water-form" class="water-form"><div class="field"><label for="water-amount">Outra quantidade (ml)</label><input id="water-amount" name="amount" type="number" min="50" max="2000" step="50" placeholder="Ex.: 300" required></div><button class="button" type="submit">Registrar água</button></form>'+
+      (latest.length?'<div class="water-recent"><h3>Registros de hoje</h3>'+latest.map(entry=>'<div class="water-log-item"><span>'+waterAmountText(entry.amountMl)+'</span><span class="muted small">'+waterTime(entry)+'</span></div>').join("")+'</div>':'<p class="small muted water-empty">Nenhum registro hoje. Adicione o primeiro copo acima.</p>')+
+      (summary.entries.length?'<button class="swap-link secondary" type="button" data-action="water-undo">Desfazer último registro</button>':'')+'</section>';
+  }
   function renderHome(profile) {
     const sessions=makePlan(profile);
     const day=(new Date().getDay()+6)%7;
@@ -504,6 +540,7 @@
       '<section class="grid">'+statCard("Treinos nesta semana",stat.week,"sessões registradas")+
       statCard("Treinos no histórico",stat.total,"sessões concluídas")+
       statCard("Corrida acumulada",stat.distance.toFixed(1).replace(".",",")+" km","distância registrada")+'</section>'+
+      renderWaterCard(profile)+
       '<div class="section-title"><div><div class="eyebrow">Hoje · '+DAYS[day]+'</div><h2>'+ (todays.length?"O que vamos treinar?":"Hoje é dia de recuperar") +'</h2></div><span class="pill">'+todays.length+' atividade(s)</span></div>'+
       (todays.length?'<div class="grid two">'+todays.map(s=>sessionCard(s)).join("")+'</div>':
         '<div class="card"><h3>Descanso também é progresso.</h3><p class="muted">Aproveite para dormir bem, se alimentar e recuperar a energia.</p><button class="button button-outline" data-nav="plan" type="button">Ver outros dias</button></div>')+
@@ -640,6 +677,7 @@
       '<div class="stack"><div class="card"><h2>Seus dados</h2><p class="muted">O backup JSON inclui fotos locais nesta versão. Os perfis não sincronizam automaticamente entre dispositivos.</p>'+
       '<div class="button-row"><button class="button button-outline" data-action="export" type="button">Exportar backup</button>'+
       '<label class="button button-outline" for="import-file">Importar backup</label><input id="import-file" type="file" accept=".json,application/json" class="sr-only"></div></div>'+
+      '<div class="card"><h2>Meta de hidratação</h2><p class="muted small">Defina a quantidade diária que deseja acompanhar. O valor inicial é de 2.000 ml e pode ser ajustado.</p><form id="water-goal-form" class="water-goal-form"><div class="field"><label for="water-goal">Meta diária (ml)</label><input id="water-goal" name="goalMl" type="number" min="500" max="10000" step="250" value="'+cleanHydration(profile.hydration).goalMl+'" required></div><button class="button button-outline" type="submit">Salvar meta</button></form><p class="small muted">A necessidade de água varia de pessoa para pessoa; use uma meta adequada à sua rotina e às orientações profissionais que você recebeu.</p></div>'+
       '<div class="card"><h2>Privacidade</h2><div class="notice warning">Perfis nesta versão são locais, sem senha ou conta online. Outras pessoas no mesmo navegador podem acessá-los. Não use para informações sensíveis.</div>'+
       '<div class="button-row"><button type="button" class="button button-danger" data-action="delete-profile">Excluir perfil atual</button></div></div></div></div>';
   }
@@ -680,6 +718,24 @@
       detail=button.dataset.session;render();scrollTo(0,0);return;
     }
     const action=button.dataset.action;
+    if(action==="water-add") {
+      const amount=Number(button.dataset.amount);
+      if(!Number.isInteger(amount)||amount<50||amount>2000){alert("Quantidade de água inválida.");return;}
+      const p=current();if(!p)return;
+      p.hydration=cleanHydration(p.hydration);
+      p.hydration.entries.push({id:uid(),date:localDate(),amountMl:amount,createdAt:new Date().toISOString()});
+      p.hydration.entries=p.hydration.entries.slice(-500);
+      save();render();notify(amount+" ml registrados!");
+      return;
+    }
+    if(action==="water-undo") {
+      const p=current();if(!p)return;
+      p.hydration=cleanHydration(p.hydration);
+      const today=p.hydration.entries.filter(entry=>entry.date===localDate()).sort((x,y)=>x.createdAt.localeCompare(y.createdAt));
+      const last=today[today.length-1];
+      if(last){p.hydration.entries=p.hydration.entries.filter(entry=>entry.id!==last.id);save();render();notify("Último registro desfeito.");}
+      return;
+    }
     if(action==="swap-open") {
       const row=button.closest(".exercise-row");
       const panel=row?.querySelector(".swap-panel");
@@ -751,10 +807,22 @@
   });
   document.addEventListener("submit",async event=>{
     const form=event.target;
-    if(!["onboard-form","settings-form","log-form","body-form","progress-form"].includes(form.id))return;
+    if(!["onboard-form","settings-form","log-form","body-form","progress-form","water-form","water-goal-form"].includes(form.id))return;
     event.preventDefault();
     try{
-      if(form.id==="onboard-form"){
+      if(form.id==="water-form"){
+        const p=current(),data=new FormData(form),amount=Number(data.get("amount"));
+        if(!Number.isInteger(amount)||amount<50||amount>2000)throw new Error("Informe uma quantidade entre 50 e 2.000 ml.");
+        p.hydration=cleanHydration(p.hydration);
+        p.hydration.entries.push({id:uid(),date:localDate(),amountMl:amount,createdAt:new Date().toISOString()});
+        p.hydration.entries=p.hydration.entries.slice(-500);
+        save();render();notify(amount+" ml registrados!");
+      }else if(form.id==="water-goal-form"){
+        const p=current(),data=new FormData(form),goal=Number(data.get("goalMl"));
+        if(!Number.isInteger(goal)||goal<500||goal>10000)throw new Error("Defina uma meta entre 500 e 10.000 ml.");
+        p.hydration=cleanHydration(p.hydration);p.hydration.goalMl=goal;
+        save();render();notify("Meta de água atualizada!");
+      }else if(form.id==="onboard-form"){
         if(state.profiles.length>=20)throw new Error("Limite de 20 perfis locais.");
         const profile=cleanProfile({id:uid(),...valuesFromForm(form),createdAt:new Date().toISOString(),logs:[]});
         state.profiles.push(profile);state.activeId=profile.id;adding=false;view="home";save();render();scrollTo(0,0);notify("Seu plano foi criado!");

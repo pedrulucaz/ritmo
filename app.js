@@ -678,7 +678,7 @@
       '<div class="button-row"><button class="button button-outline" data-action="export" type="button">Exportar backup</button>'+
       '<label class="button button-outline" for="import-file">Importar backup</label><input id="import-file" type="file" accept=".json,application/json" class="sr-only"></div></div>'+
       '<div class="card"><h2>Meta de hidratação</h2><p class="muted small">Defina a quantidade diária que deseja acompanhar. O valor inicial é de 2.000 ml e pode ser ajustado.</p><form id="water-goal-form" class="water-goal-form"><div class="field"><label for="water-goal">Meta diária (ml)</label><input id="water-goal" name="goalMl" type="number" min="500" max="10000" step="250" value="'+cleanHydration(profile.hydration).goalMl+'" required></div><button class="button button-outline" type="submit">Salvar meta</button></form><p class="small muted">A necessidade de água varia de pessoa para pessoa; use uma meta adequada à sua rotina e às orientações profissionais que você recebeu.</p></div>'+
-      '<div class="card"><h2>Privacidade</h2><div class="notice warning">Perfis nesta versão são locais, sem senha ou conta online. Outras pessoas no mesmo navegador podem acessá-los. Não use para informações sensíveis.</div>'+
+      '<div class="card"><h2>Notificações</h2><p class="muted small">Ative as notificações do Ritmo neste dispositivo para receber avisos de treino e novidades. Você poderá permitir ou bloquear no próprio navegador.</p><div class="button-row"><button type="button" class="button button-outline" data-action="enable-notifications">Ativar notificações</button></div><p class="small muted" id="notification-status" aria-live="polite">A permissão será solicitada somente quando você tocar no botão.</p></div><div class="card"><h2>Privacidade</h2><div class="notice warning">Perfis nesta versão são locais, sem senha ou conta online. Outras pessoas no mesmo navegador podem acessá-los. Não use para informações sensíveis.</div>'+
       '<div class="button-row"><button type="button" class="button button-danger" data-action="delete-profile">Excluir perfil atual</button></div></div></div></div>';
   }
   function valuesFromForm(form,previous) {
@@ -718,6 +718,24 @@
       detail=button.dataset.session;render();scrollTo(0,0);return;
     }
     const action=button.dataset.action;
+    if(action==="enable-notifications") {
+      try {
+        const oneSignal=window.RitmoOneSignal;
+        if(!oneSignal) {
+          const status=document.getElementById("notification-status");
+          if(status)status.textContent="O serviço de notificações ainda está carregando. Aguarde alguns segundos e tente novamente.";
+          return;
+        }
+        await oneSignal.Notifications.requestPermission();
+        const status=document.getElementById("notification-status");
+        if(status)status.textContent=oneSignal.Notifications.permissionNative==="granted"?"Notificações permitidas neste dispositivo.":"A permissão não foi concedida. Você pode alterar isso nas configurações do navegador.";
+      } catch(error) {
+        const status=document.getElementById("notification-status");
+        if(status)status.textContent="Não foi possível ativar as notificações neste navegador.";
+        console.warn("Falha ao solicitar notificações do OneSignal.",error);
+      }
+      return;
+    }
     if(action==="water-add") {
       const amount=Number(button.dataset.amount);
       if(!Number.isInteger(amount)||amount<50||amount>2000){alert("Quantidade de água inválida.");return;}
